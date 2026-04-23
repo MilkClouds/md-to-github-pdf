@@ -1,0 +1,33 @@
+[project]
+name = "md-to-github-pdf"
+version = "0.1.0"
+description = "Render a markdown file or URL to PDF matching github.com's renderer (content only, no repo chrome)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Suhwan Choi" }]
+keywords = ["markdown", "pdf", "github", "gfm", "renderer"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Utilities",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+md-to-github-pdf = "md_to_github_pdf.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/MilkClouds/md-to-github-pdf"
+Issues = "https://github.com/MilkClouds/md-to-github-pdf/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/md_to_github_pdf"]
