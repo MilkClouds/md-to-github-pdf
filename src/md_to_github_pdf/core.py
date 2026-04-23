@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 GITHUB_API = "https://api.github.com/markdown"
@@ -26,12 +27,13 @@ _BLOB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$
 _RAW_RE = re.compile(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/")
 
 
-def read_source(src: str) -> tuple[str, str, str | None]:
+def read_source(src: str, *, token: str | None = None) -> tuple[str, str, str | None]:
     """Resolve src (local path or URL) to (markdown_text, title, auto_context).
 
     For a github.com blob URL, rewrites to raw.githubusercontent.com and
     derives `owner/repo` as auto_context. For a raw URL, derives auto_context.
-    For a local path, title is the filename stem.
+    For a local path, title is the filename stem. Passes `token` as a Bearer
+    Authorization header when fetching URLs — needed for private repos.
     """
     if re.match(r"^https?://", src):
         url = src
@@ -45,8 +47,18 @@ def read_source(src: str) -> tuple[str, str, str | None]:
             m2 = _RAW_RE.match(url)
             if m2:
                 auto_ctx = f"{m2.group(1)}/{m2.group(2)}"
-        with urlopen(url, timeout=30) as resp:
-            text = resp.read().decode("utf-8")
+        req = Request(url, headers={"User-Agent": "md-to-github-pdf"})
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urlopen(req, timeout=30) as resp:
+                text = resp.read().decode("utf-8")
+        except HTTPError as exc:
+            if exc.code == 404 and not token:
+                raise RuntimeError(
+                    f"HTTP 404 for {url} — if this is a private repo, set $GITHUB_TOKEN or pass --token."
+                ) from exc
+            raise
         title = Path(url.split("?", 1)[0]).stem
         return text, title, auto_ctx
 
@@ -200,7 +212,7 @@ def convert(
     keep_html: bool = False,
 ) -> Path:
     """End-to-end. source is a local path or a URL. Returns resolved PDF path."""
-    md_text, title, auto_ctx = read_source(source)
+    md_text, title, auto_ctx = read_source(source, token=token)
     effective_context = context or auto_ctx
     body_html = render_markdown(md_text, context=effective_context, token=token)
     full_html = wrap_html(body_html, title=title, theme=theme, scale=scale, emoji=emoji)
