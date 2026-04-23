@@ -9,7 +9,7 @@ Every other tool either uses a local Markdown parser (not pixel-identical to git
 ## Install
 
 ```bash
-uv tool install md-to-github-pdf
+uv tool install git+https://github.com/MilkClouds/md-to-github-pdf
 ```
 
 Chromium is auto-downloaded on first use (one-time, ~170MB) — no system Chrome required.
