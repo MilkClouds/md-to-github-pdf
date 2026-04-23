@@ -6,8 +6,12 @@ Render a Markdown file (or a github.com URL) to PDF **matching github.com's rend
 
 Every other tool either uses a local Markdown parser (not pixel-identical to github.com) or a dead wkhtmltopdf backend. This one delegates rendering to GitHub's own `/markdown` API and prints with modern headless Chrome.
 
+### Demo
+
+Below is **this very README**, rendered by `md-to-github-pdf` — no manipulation, just the tool's output:
+
 <p align="center">
-  <img src="docs/demo.png" alt="Demo — this README, rendered by the tool itself" width="480">
+  <img src="docs/demo.png" alt="this README rendered by md-to-github-pdf" width="480">
 </p>
 
 ## Install
