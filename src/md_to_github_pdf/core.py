@@ -199,6 +199,15 @@ def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None
         _run()
 
 
+def _gh_token() -> str | None:
+    """Return `gh auth token` output if gh CLI is installed and authed, else None."""
+    try:
+        r = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.strip() or None if r.returncode == 0 else None
+
+
 def convert(
     source: str,
     pdf_path: Path,
@@ -211,7 +220,12 @@ def convert(
     wait_ms: int = 8000,
     keep_html: bool = False,
 ) -> Path:
-    """End-to-end. source is a local path or a URL. Returns resolved PDF path."""
+    """End-to-end. source is a local path or a URL. Returns resolved PDF path.
+
+    Token resolution order: explicit `token` > `$GITHUB_TOKEN` > `gh auth token`.
+    """
+    if token is None:
+        token = _gh_token()
     md_text, title, auto_ctx = read_source(source, token=token)
     effective_context = context or auto_ctx
     body_html = render_markdown(md_text, context=effective_context, token=token)

@@ -24,10 +24,11 @@ md-to-github-pdf https://raw.githubusercontent.com/o/r/main/F.md  # remote (raw 
 md-to-github-pdf file.md --theme dark
 md-to-github-pdf file.md --scale 0.85        # denser typography
 md-to-github-pdf file.md -o out.pdf
-GITHUB_TOKEN=ghp_... md-to-github-pdf file.md  # 60→5000 req/hr, needed for private repo URLs
 ```
 
-Output path defaults to `<basename>.pdf`. GitHub URLs auto-resolve `owner/repo` context so relative images and `#123` references work. Private repo URLs require `GITHUB_TOKEN` (or `--token`).
+Output path defaults to `<basename>.pdf`. GitHub URLs auto-resolve `owner/repo` context so relative images and `#123` references work.
+
+**Auth**: if `gh` CLI is installed and authed (`gh auth login`), credentials are picked up automatically — private repo URLs just work. Otherwise set `$GITHUB_TOKEN` or pass `--token`. Either also lifts the API rate limit 60→5000 req/hr.
 
 ## How
 
