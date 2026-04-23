@@ -43,5 +43,6 @@ def test_read_source_local(tmp_path):
 def test_read_source_blob_url_parses_context_without_fetching():
     # Just check the regex path derives the context; actual fetch would hit network.
     from md_to_github_pdf.core import _BLOB_RE
+
     m = _BLOB_RE.match("https://github.com/o/r/blob/main/docs/a.md")
     assert m and m.groups() == ("o", "r", "main", "docs/a.md")

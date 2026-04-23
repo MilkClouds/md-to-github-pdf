@@ -13,7 +13,7 @@ classifiers = [
     "Topic :: Text Processing :: Markup :: Markdown",
     "Topic :: Utilities",
 ]
-dependencies = []
+dependencies = ["playwright>=1.40"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
@@ -31,3 +31,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/md_to_github_pdf"]
+
+[tool.ruff]
+line-length = 119
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

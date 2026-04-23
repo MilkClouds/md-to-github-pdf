@@ -10,7 +10,7 @@ Every other tool either uses a local Markdown parser (not pixel-identical to git
 uv tool install md-to-github-pdf
 ```
 
-Requires `google-chrome` (or Chromium) on PATH.
+Chromium is auto-downloaded on first use (one-time, ~170MB) — no system Chrome required.
 
 ## Use
 
@@ -29,7 +29,7 @@ Output path defaults to `<basename>.pdf`. GitHub URLs auto-resolve `owner/repo` 
 
 ## How
 
-`md` → GitHub `/markdown` API (`mode=gfm`) → `github-markdown-css` + `highlight.js` + Twemoji SVGs → `google-chrome --headless=new --print-to-pdf`.
+`md` → GitHub `/markdown` API (`mode=gfm`) → `github-markdown-css` + `highlight.js` + Twemoji SVGs → Playwright's bundled Chromium `page.pdf()`.
 
 GFM extensions — `> [!NOTE]` alerts, `- [x]` task lists, tables, footnotes, emoji shortcodes — all handled by the API, so the output is byte-identical to what github.com renders.
 

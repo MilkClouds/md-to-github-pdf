@@ -18,26 +18,28 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="md-to-github-pdf",
         description=(
-            "Render a markdown file or URL to PDF matching github.com's "
-            "renderer (content only, no repo chrome)."
+            "Render a markdown file or URL to PDF matching github.com's renderer (content only, no repo chrome)."
         ),
     )
     p.add_argument("source", help="Local .md path OR http(s) URL (github.com blob URLs auto-resolve)")
-    p.add_argument("-o", "--output", type=Path, default=None,
-                   help="Output .pdf path (default: <basename>.pdf)")
+    p.add_argument("-o", "--output", type=Path, default=None, help="Output .pdf path (default: <basename>.pdf)")
     p.add_argument("--theme", choices=["light", "dark"], default="light")
-    p.add_argument("--scale", type=float, default=1.0,
-                   help="Font-size multiplier (1.0 = github.com-exact; 0.85 denser).")
-    p.add_argument("--no-emoji", dest="emoji", action="store_false",
-                   help="Skip Twemoji SVG injection.")
-    p.add_argument("--context", default=None,
-                   help="Repo 'owner/repo' for #123/@user/relative-image resolution (auto-derived from github.com URLs).")
-    p.add_argument("--token", default=os.environ.get("GITHUB_TOKEN"),
-                   help="GitHub token (or $GITHUB_TOKEN). Raises rate limit 60→5000 req/hr.")
-    p.add_argument("--chrome", default=os.environ.get("CHROME", "google-chrome"))
+    p.add_argument(
+        "--scale", type=float, default=1.0, help="Font-size multiplier (1.0 = github.com-exact; 0.85 denser)."
+    )
+    p.add_argument("--no-emoji", dest="emoji", action="store_false", help="Skip Twemoji SVG injection.")
+    p.add_argument(
+        "--context",
+        default=None,
+        help="Repo 'owner/repo' for #123/@user/image resolution (auto-derived from github.com URLs).",
+    )
+    p.add_argument(
+        "--token",
+        default=os.environ.get("GITHUB_TOKEN"),
+        help="GitHub token (or $GITHUB_TOKEN). Raises rate limit 60→5000 req/hr.",
+    )
     p.add_argument("--wait-ms", type=int, default=8000)
-    p.add_argument("--keep-html", action="store_true",
-                   help="Keep intermediate HTML next to the PDF.")
+    p.add_argument("--keep-html", action="store_true", help="Keep intermediate HTML next to the PDF.")
     args = p.parse_args(argv)
 
     is_url = bool(re.match(r"^https?://", args.source))
@@ -56,10 +58,14 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         out = convert(
-            args.source, pdf,
-            theme=args.theme, scale=args.scale, emoji=args.emoji,
-            context=args.context, token=args.token,
-            chrome=args.chrome, wait_ms=args.wait_ms,
+            args.source,
+            pdf,
+            theme=args.theme,
+            scale=args.scale,
+            emoji=args.emoji,
+            context=args.context,
+            token=args.token,
+            wait_ms=args.wait_ms,
             keep_html=args.keep_html,
         )
     except Exception as exc:

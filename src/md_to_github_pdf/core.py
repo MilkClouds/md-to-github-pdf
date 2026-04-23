@@ -1,15 +1,15 @@
 """md → github.com-styled PDF.
 
 Pipeline: source (local path or URL) → GitHub /markdown API (GFM) →
-github-markdown-css + highlight.js + Twemoji → headless Chrome --print-to-pdf.
+github-markdown-css + highlight.js + Twemoji → Playwright bundled chromium.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -152,38 +152,39 @@ def wrap_html(
 """
 
 
-def html_to_pdf(
-    html_path: Path,
-    pdf_path: Path,
-    *,
-    chrome: str = "google-chrome",
-    wait_ms: int = 8000,
-) -> None:
-    """Render HTML at html_path to pdf_path via headless Chromium."""
-    if shutil.which(chrome) is None and not Path(chrome).exists():
-        raise FileNotFoundError(
-            f"chrome executable not found: {chrome}. "
-            "Install google-chrome or set --chrome/$CHROME."
-        )
-    cmd = [
-        chrome,
-        "--headless=new",
-        "--no-sandbox",
-        "--disable-gpu",
-        "--hide-scrollbars",
-        # Chrome <=120 used --print-to-pdf-no-header; Chrome 121+ renamed it.
-        "--no-pdf-header-footer",
-        "--print-to-pdf-no-header",
-        f"--virtual-time-budget={wait_ms}",
-        f"--print-to-pdf={pdf_path.resolve()}",
-        f"file://{html_path.resolve()}",
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0 or not pdf_path.exists():
-        raise RuntimeError(
-            f"chrome print-to-pdf failed (exit {result.returncode}):\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None:
+    """Render HTML to PDF via Playwright's bundled chromium.
+
+    On first use, if the chromium binary is missing, auto-installs it via
+    `python -m playwright install chromium` (one-time, ~170MB download).
+    """
+    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import sync_playwright
+
+    def _run() -> None:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page()
+                page.goto(f"file://{html_path.resolve()}", wait_until="networkidle", timeout=wait_ms * 2)
+                page.pdf(
+                    path=str(pdf_path.resolve()),
+                    format="A4",
+                    margin={"top": "18mm", "bottom": "18mm", "left": "14mm", "right": "14mm"},
+                    print_background=True,
+                    display_header_footer=False,
+                )
+            finally:
+                browser.close()
+
+    try:
+        _run()
+    except PlaywrightError as exc:
+        if "Executable doesn't exist" not in str(exc):
+            raise
+        print("Installing chromium (one-time, ~170MB)...", file=sys.stderr)
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        _run()
 
 
 def convert(
@@ -195,7 +196,6 @@ def convert(
     emoji: bool = True,
     context: str | None = None,
     token: str | None = None,
-    chrome: str = "google-chrome",
     wait_ms: int = 8000,
     keep_html: bool = False,
 ) -> Path:
@@ -203,31 +203,22 @@ def convert(
     md_text, title, auto_ctx = read_source(source)
     effective_context = context or auto_ctx
     body_html = render_markdown(md_text, context=effective_context, token=token)
-    full_html = wrap_html(
-        body_html, title=title, theme=theme, scale=scale, emoji=emoji
-    )
+    full_html = wrap_html(body_html, title=title, theme=theme, scale=scale, emoji=emoji)
 
     if keep_html:
         html_path = pdf_path.with_suffix(".html")
         html_path.write_text(full_html, encoding="utf-8")
-        html_to_pdf(html_path, pdf_path, chrome=chrome, wait_ms=wait_ms)
+        html_to_pdf(html_path, pdf_path, wait_ms=wait_ms)
     else:
-        tmp = tempfile.NamedTemporaryFile(
-            "w", suffix=".html", delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8")
         try:
             tmp.write(full_html)
             tmp.close()
-            html_to_pdf(Path(tmp.name), pdf_path, chrome=chrome, wait_ms=wait_ms)
+            html_to_pdf(Path(tmp.name), pdf_path, wait_ms=wait_ms)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
     return pdf_path.resolve()
 
 
 def _escape(s: str) -> str:
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
