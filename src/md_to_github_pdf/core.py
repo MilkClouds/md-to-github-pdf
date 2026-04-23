@@ -178,7 +178,13 @@ def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None
             browser = pw.chromium.launch()
             try:
                 page = browser.new_page()
-                page.goto(f"file://{html_path.resolve()}", wait_until="networkidle", timeout=wait_ms * 2)
+                page.goto(f"file://{html_path.resolve()}", wait_until="load", timeout=wait_ms * 2)
+                # Twemoji injects <img> tags on load; wait for those to finish loading
+                # instead of sitting on `networkidle` (which always adds a 500ms idle timer).
+                page.wait_for_function(
+                    "() => Array.from(document.images).every(i => i.complete)",
+                    timeout=wait_ms,
+                )
                 page.pdf(
                     path=str(pdf_path.resolve()),
                     format="A4",
