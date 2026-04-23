@@ -1,5 +1,7 @@
 # md-to-github-pdf
 
+[![CI](https://github.com/MilkClouds/md-to-github-pdf/actions/workflows/ci.yml/badge.svg)](https://github.com/MilkClouds/md-to-github-pdf/actions/workflows/ci.yml)
+
 Render a Markdown file (or a github.com URL) to PDF **matching github.com's renderer** — content only, no repo chrome.
 
 Every other tool either uses a local Markdown parser (not pixel-identical to github.com) or a dead wkhtmltopdf backend. This one delegates rendering to GitHub's own `/markdown` API and prints with modern headless Chrome.
