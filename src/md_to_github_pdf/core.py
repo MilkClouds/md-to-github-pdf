@@ -6,13 +6,17 @@ github-markdown-css + highlight.js + Twemoji → Playwright bundled chromium.
 
 from __future__ import annotations
 
+import base64
+import html as _html
 import json
+import mimetypes
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 GITHUB_API = "https://api.github.com/markdown"
@@ -21,17 +25,20 @@ CSS_BASE = "https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-{
 CSS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/styles/{hljs_theme}.min.css"
 JS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"
 JS_TWEMOJI = "https://cdn.jsdelivr.net/npm/@twemoji/api@15/dist/twemoji.min.js"
-TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/"
+TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
 
 _BLOB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
 _RAW_RE = re.compile(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/")
+_IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\ssrc=")([^"]*)(")', re.IGNORECASE)
 
 _PAGE_SIZES = {"Letter", "Legal", "Tabloid", "Ledger", "A0", "A1", "A2", "A3", "A4", "A5", "A6"}
 
 
-def read_source(src: str, *, token: str | None = None) -> tuple[str, str, str | None]:
-    """Resolve src (local path or URL) to (markdown_text, title, auto_context).
+def read_source(src: str, *, token: str | None = None) -> tuple[str, str, str | None, str]:
+    """Resolve src (local path or URL) to (markdown_text, title, auto_context, base_url).
 
+    base_url is the source's directory — a file:// or https:// URL with a
+    trailing slash — used to resolve relative image paths in the rendered HTML.
     For a github.com blob URL, rewrites to raw.githubusercontent.com and
     derives `owner/repo` as auto_context. For a raw URL, derives auto_context.
     For a local path, title is the filename stem. Passes `token` as a Bearer
@@ -62,10 +69,11 @@ def read_source(src: str, *, token: str | None = None) -> tuple[str, str, str | 
                 ) from exc
             raise
         title = Path(url.split("?", 1)[0]).stem
-        return text, title, auto_ctx
+        return text, title, auto_ctx, urljoin(url, ".")
 
     path = Path(src)
-    return path.read_text(encoding="utf-8"), path.stem, None
+    base_url = urljoin(path.resolve().as_uri(), ".")
+    return path.read_text(encoding="utf-8"), path.stem, None, base_url
 
 
 def render_markdown(
@@ -91,8 +99,56 @@ def render_markdown(
     )
     if token:
         req.add_header("Authorization", f"Bearer {token}")
-    with urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8")
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8")
+    except HTTPError as exc:
+        remaining = exc.headers.get("X-RateLimit-Remaining") if exc.headers else None
+        if exc.code == 429 or (exc.code == 403 and remaining == "0"):
+            raise RuntimeError(
+                "GitHub /markdown API rate limit reached — set $GITHUB_TOKEN or pass --token "
+                "to raise the limit 60→5000 req/hr."
+            ) from exc
+        if exc.code == 401:
+            raise RuntimeError("GitHub auth failed (HTTP 401) — check your token.") from exc
+        raise
+    except URLError as exc:
+        raise RuntimeError(f"GitHub /markdown API unreachable: {exc.reason}") from exc
+
+
+def resolve_image_srcs(body_html: str, base_url: str | None) -> str:
+    """Make relative <img src> in the fragment resolve outside the temp HTML.
+
+    GitHub's /markdown API leaves relative image paths untouched (even with a
+    context), so they'd otherwise resolve against the throwaway temp HTML file
+    and break. Each relative src is joined against base_url (the source's
+    directory): local files (file:// base) are inlined as base64 data: URIs so
+    the PDF is self-contained; remote files become absolute URLs. Absolute
+    http(s)/data srcs are left as-is.
+    """
+    if not base_url:
+        return body_html
+
+    def repl(m: re.Match[str]) -> str:
+        pre, src, post = m.groups()
+        if re.match(r"^(?:https?:|data:)", src, re.IGNORECASE):
+            return m.group(0)
+        target = urljoin(base_url, _html.unescape(src))
+        if target.startswith("file://"):
+            target = _embed_file_uri(target) or target
+        return f"{pre}{_html.escape(target, quote=True)}{post}"
+
+    return _IMG_SRC_RE.sub(repl, body_html)
+
+
+def _embed_file_uri(file_uri: str) -> str | None:
+    """file:// URI → base64 data: URI, or None if the file is missing."""
+    path = Path(unquote(urlsplit(file_uri).path))
+    if not path.is_file():
+        return None
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
 
 
 def wrap_html(
@@ -191,13 +247,17 @@ def html_to_pdf(
             browser = pw.chromium.launch()
             try:
                 page = browser.new_page()
-                page.goto(f"file://{html_path.resolve()}", wait_until="load", timeout=wait_ms * 2)
+                page.goto(html_path.resolve().as_uri(), wait_until="load", timeout=wait_ms * 2)
                 # Twemoji injects <img> tags on load; wait for those to finish loading
                 # instead of sitting on `networkidle` (which always adds a 500ms idle timer).
-                page.wait_for_function(
-                    "() => Array.from(document.images).every(i => i.complete)",
-                    timeout=wait_ms,
-                )
+                # Best-effort: a single slow remote image shouldn't abort the whole conversion.
+                try:
+                    page.wait_for_function(
+                        "() => Array.from(document.images).every(i => i.complete)",
+                        timeout=wait_ms,
+                    )
+                except PlaywrightError:
+                    pass
                 page.pdf(
                     path=str(pdf_path.resolve()),
                     format=page_size,
@@ -248,9 +308,10 @@ def convert(
     """
     if token is None:
         token = _gh_token()
-    md_text, title, auto_ctx = read_source(source, token=token)
+    md_text, title, auto_ctx, base_url = read_source(source, token=token)
     effective_context = context or auto_ctx
     body_html = render_markdown(md_text, context=effective_context, token=token)
+    body_html = resolve_image_srcs(body_html, base_url)
     full_html = wrap_html(
         body_html, title=title, theme=theme, scale=scale, emoji=emoji, page_size=page_size, landscape=landscape
     )

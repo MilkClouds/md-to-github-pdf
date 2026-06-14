@@ -34,7 +34,7 @@ md-to-github-pdf file.md --scale 0.85        # denser typography
 md-to-github-pdf file.md -o out.pdf
 ```
 
-Output path defaults to `<basename>.pdf`. GitHub URLs auto-resolve `owner/repo` context so relative images and `#123` references work.
+Output path defaults to `<basename>.pdf`. Relative image paths resolve against the source's location — local images are embedded into the PDF, remote ones are fetched — and GitHub URLs auto-resolve `owner/repo` context for `#123`/`@user` references.
 
 **Auth**: if `gh` CLI is installed and authed (`gh auth login`), credentials are picked up automatically — private repo URLs just work. Otherwise set `$GITHUB_TOKEN` or pass `--token`. Either also lifts the API rate limit 60→5000 req/hr.
 
