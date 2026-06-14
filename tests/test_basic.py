@@ -31,6 +31,11 @@ def test_wrap_html_emoji_toggle():
     assert "twemoji" not in wrap_html("", emoji=False)
 
 
+def test_wrap_html_twemoji_base_is_v15():
+    html = wrap_html("", emoji=True)
+    assert "jdecked/twemoji@15" in html
+
+
 def test_read_source_local(tmp_path):
     f = tmp_path / "x.md"
     f.write_text("# hello")

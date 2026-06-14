@@ -21,7 +21,7 @@ CSS_BASE = "https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-{
 CSS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/styles/{hljs_theme}.min.css"
 JS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"
 JS_TWEMOJI = "https://cdn.jsdelivr.net/npm/@twemoji/api@15/dist/twemoji.min.js"
-TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/"
+TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
 
 _BLOB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
 _RAW_RE = re.compile(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/")
