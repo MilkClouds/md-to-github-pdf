@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
@@ -25,7 +25,7 @@ CSS_BASE = "https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-{
 CSS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/styles/{hljs_theme}.min.css"
 JS_HLJS = "https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"
 JS_TWEMOJI = "https://cdn.jsdelivr.net/npm/@twemoji/api@15/dist/twemoji.min.js"
-TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/"
+TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
 
 _BLOB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
 _RAW_RE = re.compile(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/")
@@ -97,8 +97,21 @@ def render_markdown(
     )
     if token:
         req.add_header("Authorization", f"Bearer {token}")
-    with urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8")
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8")
+    except HTTPError as exc:
+        remaining = exc.headers.get("X-RateLimit-Remaining") if exc.headers else None
+        if exc.code == 429 or (exc.code == 403 and remaining == "0"):
+            raise RuntimeError(
+                "GitHub /markdown API rate limit reached — set $GITHUB_TOKEN or pass --token "
+                "to raise the limit 60→5000 req/hr."
+            ) from exc
+        if exc.code == 401:
+            raise RuntimeError("GitHub auth failed (HTTP 401) — check your token.") from exc
+        raise
+    except URLError as exc:
+        raise RuntimeError(f"GitHub /markdown API unreachable: {exc.reason}") from exc
 
 
 def resolve_image_srcs(body_html: str, base_url: str | None) -> str:
@@ -221,13 +234,17 @@ def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None
             browser = pw.chromium.launch()
             try:
                 page = browser.new_page()
-                page.goto(f"file://{html_path.resolve()}", wait_until="load", timeout=wait_ms * 2)
+                page.goto(html_path.resolve().as_uri(), wait_until="load", timeout=wait_ms * 2)
                 # Twemoji injects <img> tags on load; wait for those to finish loading
                 # instead of sitting on `networkidle` (which always adds a 500ms idle timer).
-                page.wait_for_function(
-                    "() => Array.from(document.images).every(i => i.complete)",
-                    timeout=wait_ms,
-                )
+                # Best-effort: a single slow remote image shouldn't abort the whole conversion.
+                try:
+                    page.wait_for_function(
+                        "() => Array.from(document.images).every(i => i.complete)",
+                        timeout=wait_ms,
+                    )
+                except PlaywrightError:
+                    pass
                 page.pdf(
                     path=str(pdf_path.resolve()),
                     format="A4",

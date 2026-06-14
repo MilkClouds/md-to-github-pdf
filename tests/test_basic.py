@@ -33,6 +33,11 @@ def test_wrap_html_emoji_toggle():
     assert "twemoji" not in wrap_html("", emoji=False)
 
 
+def test_wrap_html_twemoji_base_is_v15():
+    html = wrap_html("", emoji=True)
+    assert "jdecked/twemoji@15" in html
+
+
 def test_read_source_local(tmp_path):
     f = tmp_path / "x.md"
     f.write_text("# hello")
@@ -108,3 +113,20 @@ def test_read_source_blob_url_parses_context_without_fetching():
 
     m = _BLOB_RE.match("https://github.com/o/r/blob/main/docs/a.md")
     assert m and m.groups() == ("o", "r", "main", "docs/a.md")
+
+
+def test_render_markdown_rate_limit(monkeypatch):
+    import email.message
+    from urllib.error import HTTPError
+
+    from md_to_github_pdf import core
+
+    hdrs = email.message.Message()
+    hdrs["X-RateLimit-Remaining"] = "0"
+
+    def boom(*args, **kwargs):
+        raise HTTPError("https://api.github.com/markdown", 403, "rate limited", hdrs, None)
+
+    monkeypatch.setattr(core, "urlopen", boom)
+    with pytest.raises(RuntimeError, match="rate limit"):
+        core.render_markdown("x")
