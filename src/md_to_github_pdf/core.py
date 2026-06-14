@@ -26,6 +26,8 @@ TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/"
 _BLOB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
 _RAW_RE = re.compile(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/")
 
+_PAGE_SIZES = {"Letter", "Legal", "Tabloid", "Ledger", "A0", "A1", "A2", "A3", "A4", "A5", "A6"}
+
 
 def read_source(src: str, *, token: str | None = None) -> tuple[str, str, str | None]:
     """Resolve src (local path or URL) to (markdown_text, title, auto_context).
@@ -100,12 +102,16 @@ def wrap_html(
     theme: str = "light",
     scale: float = 1.0,
     emoji: bool = True,
+    page_size: str = "A4",
+    landscape: bool = False,
 ) -> str:
     """Wrap an HTML fragment with github-markdown-css, highlight.js, Twemoji."""
     if theme not in {"light", "dark"}:
         raise ValueError(f"theme must be 'light' or 'dark', got {theme!r}")
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
+    if page_size not in _PAGE_SIZES:
+        raise ValueError(f"page_size must be one of {sorted(_PAGE_SIZES)}, got {page_size!r}")
     base_css = CSS_BASE.format(theme=theme)
     hljs_css = CSS_HLJS.format(hljs_theme="github-dark" if theme == "dark" else "github")
     bg = "#0d1117" if theme == "dark" else "#ffffff"
@@ -128,7 +134,7 @@ def wrap_html(
 <script src="{JS_HLJS}" defer></script>
 {twemoji_tag}
 <style>
-  @page {{ size: A4; margin: 18mm 14mm; }}
+  @page {{ size: {page_size}{" landscape" if landscape else ""}; margin: 18mm 14mm; }}
   html, body {{ background: {bg}; margin: 0; padding: 0; color-scheme: {color_scheme}; }}
   .markdown-body {{
     box-sizing: border-box; min-width: 200px; max-width: 980px;
@@ -164,7 +170,14 @@ def wrap_html(
 """
 
 
-def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None:
+def html_to_pdf(
+    html_path: Path,
+    pdf_path: Path,
+    *,
+    wait_ms: int = 8000,
+    page_size: str = "A4",
+    landscape: bool = False,
+) -> None:
     """Render HTML to PDF via Playwright's bundled chromium.
 
     On first use, if the chromium binary is missing, auto-installs it via
@@ -187,7 +200,8 @@ def html_to_pdf(html_path: Path, pdf_path: Path, *, wait_ms: int = 8000) -> None
                 )
                 page.pdf(
                     path=str(pdf_path.resolve()),
-                    format="A4",
+                    format=page_size,
+                    landscape=landscape,
                     margin={"top": "18mm", "bottom": "18mm", "left": "14mm", "right": "14mm"},
                     print_background=True,
                     display_header_footer=False,
@@ -225,6 +239,8 @@ def convert(
     token: str | None = None,
     wait_ms: int = 8000,
     keep_html: bool = False,
+    page_size: str = "A4",
+    landscape: bool = False,
 ) -> Path:
     """End-to-end. source is a local path or a URL. Returns resolved PDF path.
 
@@ -235,18 +251,20 @@ def convert(
     md_text, title, auto_ctx = read_source(source, token=token)
     effective_context = context or auto_ctx
     body_html = render_markdown(md_text, context=effective_context, token=token)
-    full_html = wrap_html(body_html, title=title, theme=theme, scale=scale, emoji=emoji)
+    full_html = wrap_html(
+        body_html, title=title, theme=theme, scale=scale, emoji=emoji, page_size=page_size, landscape=landscape
+    )
 
     if keep_html:
         html_path = pdf_path.with_suffix(".html")
         html_path.write_text(full_html, encoding="utf-8")
-        html_to_pdf(html_path, pdf_path, wait_ms=wait_ms)
+        html_to_pdf(html_path, pdf_path, wait_ms=wait_ms, page_size=page_size, landscape=landscape)
     else:
         tmp = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8")
         try:
             tmp.write(full_html)
             tmp.close()
-            html_to_pdf(Path(tmp.name), pdf_path, wait_ms=wait_ms)
+            html_to_pdf(Path(tmp.name), pdf_path, wait_ms=wait_ms, page_size=page_size, landscape=landscape)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
     return pdf_path.resolve()
