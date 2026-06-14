@@ -25,5 +25,10 @@ jobs:
       - name: Ruff format check
         run: uv tool run ruff format --check .
 
+      - name: Install Chromium for smoke test
+        run: uv run --extra test python -m playwright install --with-deps chromium
+
       - name: Pytest
+        env:
+          PDF_SMOKE: "1"
         run: uv run --extra test pytest -v
