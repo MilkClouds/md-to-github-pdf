@@ -76,6 +76,13 @@ def test_resolve_image_srcs_remote_relative_to_absolute():
     assert 'src="https://raw.githubusercontent.com/o/r/main/docs/img/a.png"' in out
 
 
+def test_resolve_image_srcs_remote_relative_reescapes_ampersand():
+    # GitHub emits the src HTML-escaped; the rewritten absolute src must stay escaped.
+    base_url = "https://raw.githubusercontent.com/o/r/main/docs/"
+    out = resolve_image_srcs('<img src="img/a.png?w=1&amp;h=2">', base_url)
+    assert 'src="https://raw.githubusercontent.com/o/r/main/docs/img/a.png?w=1&amp;h=2"' in out
+
+
 def test_resolve_image_srcs_skips_absolute():
     base_url = "https://raw.githubusercontent.com/o/r/main/"
     for src in ("https://camo.example/x", "http://e/y.png", "data:image/png;base64,AAA"):

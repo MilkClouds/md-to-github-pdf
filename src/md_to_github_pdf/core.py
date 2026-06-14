@@ -121,7 +121,7 @@ def resolve_image_srcs(body_html: str, base_url: str | None) -> str:
         target = urljoin(base_url, _html.unescape(src))
         if target.startswith("file://"):
             target = _embed_file_uri(target) or target
-        return f"{pre}{target}{post}"
+        return f"{pre}{_html.escape(target, quote=True)}{post}"
 
     return _IMG_SRC_RE.sub(repl, body_html)
 
