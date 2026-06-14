@@ -40,6 +40,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--wait-ms", type=int, default=8000)
     p.add_argument("--keep-html", action="store_true", help="Keep intermediate HTML next to the PDF.")
+    p.add_argument(
+        "--page-size",
+        default="A4",
+        help="Page size: A4 (default), Letter, Legal, Tabloid, Ledger, A0–A6.",
+    )
+    p.add_argument("--landscape", action="store_true", help="Use landscape orientation.")
     args = p.parse_args(argv)
 
     is_url = bool(re.match(r"^https?://", args.source))
@@ -67,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             token=args.token,
             wait_ms=args.wait_ms,
             keep_html=args.keep_html,
+            page_size=args.page_size,
+            landscape=args.landscape,
         )
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -33,6 +33,20 @@ def test_wrap_html_emoji_toggle():
     assert "twemoji" not in wrap_html("", emoji=False)
 
 
+def test_wrap_html_page_size_landscape():
+    html = wrap_html("<p>hi</p>", page_size="Letter", landscape=True)
+    assert "size: Letter landscape" in html
+
+
+def test_wrap_html_default_page_size():
+    assert "size: A4;" in wrap_html("<p>hi</p>")
+
+
+def test_wrap_html_rejects_bad_page_size():
+    with pytest.raises(ValueError):
+        wrap_html("<p>hi</p>", page_size="Huge")
+
+
 def test_wrap_html_twemoji_base_is_v15():
     html = wrap_html("", emoji=True)
     assert "jdecked/twemoji@15" in html
