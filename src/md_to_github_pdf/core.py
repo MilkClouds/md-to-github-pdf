@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 GITHUB_API = "https://api.github.com/markdown"
@@ -89,8 +89,21 @@ def render_markdown(
     )
     if token:
         req.add_header("Authorization", f"Bearer {token}")
-    with urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8")
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8")
+    except HTTPError as exc:
+        remaining = exc.headers.get("X-RateLimit-Remaining") if exc.headers else None
+        if exc.code == 429 or (exc.code == 403 and remaining == "0"):
+            raise RuntimeError(
+                "GitHub /markdown API rate limit reached — set $GITHUB_TOKEN or pass --token "
+                "to raise the limit 60→5000 req/hr."
+            ) from exc
+        if exc.code == 401:
+            raise RuntimeError("GitHub auth failed (HTTP 401) — check your token.") from exc
+        raise
+    except URLError as exc:
+        raise RuntimeError(f"GitHub /markdown API unreachable: {exc.reason}") from exc
 
 
 def wrap_html(
