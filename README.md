@@ -50,6 +50,11 @@ GFM extensions — `> [!NOTE]` alerts, `- [x]` task lists, tables, footnotes, em
 - Mermaid blocks not rendered (github.com page-level feature, outside `/markdown` API)
 - Unauthenticated rate limit: 60 req/hr (use `GITHUB_TOKEN` for 5000)
 
+## See also
+
+- https://github.com/jmaupetit/md2pdf
+- https://github.com/simonhaenisch/md-to-pdf
+
 ## License
 
 MIT
